@@ -1038,25 +1038,28 @@ async function initPreloadSequence() {
   
   toast(`Preloading system defaults...`, 'warn');
   
-  for (const f of PRELOAD_CONFIG.ungendered) {
-    await preloadSingleFile(PRELOAD_CONFIG.baseFolder + f, f, 'Any');
-  }
-  
-  // FIXED: Changed "male/" to "Male/" to match case-sensitive filesystems
-  for (const f of PRELOAD_CONFIG.male) {
-    await preloadSingleFile(PRELOAD_CONFIG.baseFolder + "Male/" + f, f, 'Male');
-  }
-  
-  // FIXED: Changed "female/" to "Female/" to match case-sensitive filesystems
-  for (const f of PRELOAD_CONFIG.female) {
-    await preloadSingleFile(PRELOAD_CONFIG.baseFolder + "Female/" + f, f, 'Female');
-  }
+  const preloadQueue = [];
 
-  // Keep the rest of your sequence here (rendering preview, completion toasts, etc.)
-  autoSelectDefaults();
-  updatePartsPanel();
-  renderPreview();
-  toast('System defaults preloaded successfully!', 'ok');
+  // 1. Pack ungendered items into concurrent thread grid
+  for (const f of PRELOAD_CONFIG.ungendered) {
+    preloadQueue.push(preloadSingleFile(PRELOAD_CONFIG.baseFolder + f, f, 'Any'));
+  }
+  
+  // 2. FIXED: Changed "male/" to "Male/" to match your real directories
+  for (const f of PRELOAD_CONFIG.male) {
+    preloadQueue.push(preloadSingleFile(PRELOAD_CONFIG.baseFolder + "Male/" + f, f, 'Male'));
+  }
+  
+  // 3. FIXED: Changed "female/" to "Female/" to match your real directories
+  for (const f of PRELOAD_CONFIG.female) {
+    preloadQueue.push(preloadSingleFile(PRELOAD_CONFIG.baseFolder + "Female/" + f, f, 'Female'));
+  }
+  
+  // Await parallel thread processing pool execution simultaneously
+  await Promise.all(preloadQueue);
+  
+  updateFileList(); updatePartsPanel(); renderPreview();
+  toast('Preloaded layout segments successfully!', 'ok');
 }
 
 renderPreview();
