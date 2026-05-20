@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VX Ace Face Generator Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --panel: #16213e;
+    --panel2: #0f3460;
+    --accent: #e94560;
+    --accent2: #f5a623;
+    --gold: #ffd700;
+    --text: #e8e8f0;
+    --text2: #9999bb;
+    --border: #2a2a4e;
+    --canvas-bg: #0d0d1a;
+    --success: #4caf50;
+    --error: #e94560;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100vh;
+    position: relative;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(233,69,96,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(233,69,96,0.03) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body.global-dragover::after {
+    content: '📭 DROP PNG GENERATOR MATERIAL ANYWHERE';
+    position: fixed;
+    inset: 12px;
+    background: rgba(13, 13, 26, 0.95);
+    border: 3px dashed var(--accent);
+    color: var(--gold);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    pointer-events: none;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8);
+  }
+
+  header {
+    position: relative;
+    z-index: 1;
+    background: var(--panel);
+    border-bottom: 2px solid var(--accent);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    text-shadow: 0 0 12px rgba(255,215,0,0.4);
+  }
+  header .subtitle { font-size: 16px; color: var(--text2); }
+  .pixel-badge {
+    background: var(--accent);
+    color: white;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    padding: 4px 8px;
+  }
+
+  .main-layout {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    width: 230px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sidebar.collapsed { width: 42px; }
+
+  .sidebar-header {
+    padding: 8px 14px;
+    background: var(--panel2);
+    border-bottom: 1px solid var(--border);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: var(--accent2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .sidebar-header:hover { background: #163060; }
+  .sidebar-header .sh-title { flex: 1; }
+  .sidebar-toggle { font-size: 13px; color: var(--text2); transition: transform 0.2s; line-height: 1; }
+  .sidebar.collapsed .sidebar-header { justify-content: center; padding: 12px 0; }
+  .sidebar.collapsed .sidebar-toggle { transform: rotate(-90deg); display: none; }
+  .sidebar.collapsed .sh-title { display: none; }
+
+  .sidebar-collapsible {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    transition: opacity 0.15s;
+  }
+  .sidebar.collapsed .sidebar-collapsible,
+  .sidebar.collapsed .drop-zone {
+    opacity: 0;
+    pointer-events: none;
+    display: none;
+  }
+
+  .drop-zone {
+    margin: 10px;
+    border: 2px dashed var(--accent);
+    border-radius: 4px;
+    padding: 16px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(233,69,96,0.05);
+    flex-shrink: 0;
+  }
+  .drop-zone:hover, .drop-zone.dragover { background: rgba(233,69,96,0.12); border-color: var(--gold); }
+  .drop-zone .drop-icon { font-size: 26px; display: block; margin-bottom: 6px; }
+  .drop-zone .drop-label { color: var(--text2); font-size: 14px; line-height: 1.5; }
+  .drop-zone .drop-label strong { color: var(--accent); }
+  #fileInput { display: none; }
+
+  .stats-bar { margin: 0 10px 6px; font-size: 14px; color: var(--text2); flex-shrink: 0; }
+  .stats-bar span { color: var(--gold); }
+
+  .file-list { flex: 1; overflow-y: auto; padding: 0 10px 10px; }
+  .file-list::-webkit-scrollbar { width: 4px; }
+  .file-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .file-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 3px; font-size: 13px; margin-bottom: 2px; }
+  .file-item:hover { background: rgba(255,255,255,0.04); }
+  .fi-status { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .fi-status.ok { background: var(--success); }
+  .fi-status.err { background: var(--error); }
+  .fi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fi-name.rejected { color: var(--error); text-decoration: line-through; }
+  .fi-part { color: var(--text2); font-size: 11px; flex-shrink: 0; }
+
+  /* ─── MAIN AREA ─── */
+  .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .controls-bar { background: var(--panel); border-bottom: 2px solid var(--border); padding: 8px 18px; display: flex; align-items: center; gap: 18px; flex-shrink: 0; flex-wrap: wrap; }
+  .ctrl-group { display: flex; align-items: center; gap: 8px; }
+  .ctrl-label { font-family: 'Press Start 2P', monospace; font-size: 7px; color: var(--text2); }
+  .gender-btn { background: transparent; border: 1px solid var(--border); color: var(--text2); font-family: 'VT323', monospace; font-size: 17px; padding: 3px 12px; cursor: pointer; transition: all 0.15s; }
+  .gender-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .gender-btn:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+
+  .scale-btn { background: transparent; border: 1px solid var(--border); color: var(--text2); font-family: 'VT323', monospace; font-size: 17px; padding: 2px 10px; cursor: pointer; transition: all 0.15s; line-height: 1.2; }
+  .scale-btn.active { background: var(--panel2); border-color: var(--accent2); color: var(--accent2); }
+  .scale-btn:hover:not(.active) { border-color: var(--accent2); color: var(--text); }
+
+  .action-buttons-wrap { display: flex; gap: 8px; margin-left: auto; }
+  .reset-btn { background: transparent; border: 1px solid var(--border); color: var(--text2); font-family: 'Press Start 2P', monospace; font-size: 7px; padding: 7px 12px; cursor: pointer; transition: all 0.15s; }
+  .reset-btn:hover { background: rgba(233, 69, 96, 0.15); border-color: var(--accent); color: var(--text); }
+
+  .export-btn { background: var(--gold); border: none; color: var(--bg); font-family: 'Press Start 2P', monospace; font-size: 7px; padding: 7px 12px; cursor: pointer; transition: all 0.15s; }
+  .export-btn:hover { background: #ffed4a; }
+  .export-btn:active { transform: scale(0.97); }
+
+  .content-split { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .panel-resizer { width: 6px; background: var(--border); cursor: col-resize; flex-shrink: 0; transition: background 0.15s; z-index: 10; position: relative; }
+  .panel-resizer:hover, .panel-resizer.dragging { background: var(--accent); }
+
+  /* ─── PREVIEW PANEL ─── */
+  .preview-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--canvas-bg); padding: 20px 16px; flex-shrink: 0; width: 260px; overflow: auto; }
+  .preview-title { font-family: 'Press Start 2P', monospace; font-size: 8px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; }
+  .canvas-wrapper { position: relative; image-rendering: pixelated; }
+  #previewCanvas { image-rendering: pixelated; display: block; border: 2px solid var(--border); background: #2a1a2e; width: 256px; height: 256px; transition: width 0.15s, height 0.15s; }
+  .canvas-info { font-size: 14px; color: var(--text2); text-align: center; line-height: 1.6; }
+  .popout-btn { background: var(--panel2); border: 1px solid var(--border); color: var(--accent2); font-family: 'VT323', monospace; font-size: 15px; padding: 2px 10px; cursor: pointer; margin-top: 4px; transition: all 0.15s; }
+  .popout-btn:hover { background: #163060; border-color: var(--accent2); color: white; }
+
+  .preview-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; opacity: 0.4; text-align: center; }
+  .preview-empty .pe-icon { font-size: 52px; }
+  .preview-empty .pe-text { font-size: 14px; color: var(--text2); line-height: 1.5; }
+
+  /* ─── PARTS PANEL ─── */
+  .parts-panel { flex: 1; overflow-y: auto; padding: 14px 16px; background: var(--bg); min-width: 0; }
+  .parts-panel::-webkit-scrollbar { width: 6px; }
+  .parts-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .no-files-msg { color: var(--text2); font-size: 15px; text-align: center; padding: 40px 20px; opacity: 0.6; line-height: 1.8; }
+  .no-files-msg span { color: var(--accent2); }
+
+  .part-section { margin-bottom: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .part-section-header { display: flex; align-items: center; gap: 10px; padding: 7px 12px; background: var(--panel2); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+  .part-section-header:hover { background: #163060; }
+  .part-section-title { font-family: 'Press Start 2P', monospace; font-size: 7px; color: var(--accent2); flex: 1; }
+  .part-count { color: var(--text2); font-family: 'VT323', monospace; font-size: 15px; }
+  .selected-label { font-family: 'VT323', monospace; font-size: 15px; color: var(--gold); min-width: 80px; text-align: right; }
+  .collapse-icon { color: var(--text2); font-size: 14px; transition: transform 0.15s; }
+  .part-section.collapsed .collapse-icon { transform: rotate(-90deg); }
+
+  .part-strip-wrap { overflow-x: auto; overflow-y: hidden; padding: 8px 10px; }
+  .part-strip-wrap::-webkit-scrollbar { height: 4px; }
+  .part-strip-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .part-section.collapsed .part-strip-wrap { display: none; }
+
+  .part-strip { display: flex; gap: 7px; align-items: flex-start; width: max-content; }
+  .variant-group { display: flex; flex-direction: column; align-items: center; gap: 3px; flex-shrink: 0; }
+  .chunk-nav { display: flex; align-items: center; gap: 3px; }
+  .chunk-btn { background: transparent; border: 1px solid var(--border); color: var(--text2); font-family: 'VT323', monospace; font-size: 16px; width: 18px; height: 18px; cursor: pointer; line-height: 1; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .chunk-btn:hover { border-color: var(--accent2); color: var(--text); }
+  .chunk-indicator { font-size: 11px; color: var(--text2); min-width: 30px; text-align: center; }
+
+  .part-thumb { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0; }
+  .part-thumb-img { width: 52px; height: 52px; border: 2px solid var(--border); background: #2a1a2e; image-rendering: pixelated; transition: border-color 0.12s, box-shadow 0.12s; flex-shrink: 0; }
+  .part-thumb:hover .part-thumb-img { border-color: var(--accent2); }
+  .part-thumb.selected .part-thumb-img { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+  .part-thumb-label { font-size: 12px; color: var(--text2); max-width: 56px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+  .part-thumb.selected .part-thumb-label { color: var(--gold); }
+
+  .suffix-badge { font-family: 'Press Start 2P', monospace; font-size: 6px; padding: 1px 3px; border-radius: 2px; background: var(--panel2); color: var(--text2); border: 1px solid var(--border); }
+  .suffix-badge.shadow { background: rgba(30,30,80,0.8); color: #8888cc; border-color: #4444aa; }
+  .suffix-badge.front  { background: rgba(80,50,10,0.8); color: #f5a623; border-color: #c07010; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 900; display: flex; align-items: center; justify-content: center; }
+  .overlay.hidden { display: none; }
+  .dialog { background: var(--panel); border: 2px solid var(--accent); padding: 28px 32px; max-width: 420px; width: 90%; position: relative; }
+  .dialog-title { font-family: 'Press Start 2P', monospace; font-size: 9px; color: var(--gold); margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .dialog-body { font-size: 16px; color: var(--text); line-height: 1.6; margin-bottom: 10px; }
+  .dialog-hint { font-size: 14px; color: var(--text2); border-left: 2px solid var(--accent2); padding-left: 10px; margin-bottom: 20px; line-height: 1.6; }
+  .dialog-files { background: var(--canvas-bg); border: 1px solid var(--border); padding: 8px 12px; font-size: 14px; color: var(--accent2); max-height: 100px; overflow-y: auto; margin-bottom: 20px; line-height: 1.8; white-space: pre-wrap; }
+  .dialog-btns { display: flex; gap: 12px; }
+  .dialog-btn { flex: 1; padding: 10px; font-family: 'Press Start 2P', monospace; font-size: 8px; cursor: pointer; border: 2px solid; transition: all 0.15s; }
+  .dialog-btn.male { background: rgba(100,140,255,0.15); border-color: #6496ff; color: #aabbff; }
+  .dialog-btn.female { background: rgba(255,100,160,0.15); border-color: #ff64a0; color: #ffaad4; }
+  .dialog-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+  .dialog-btn.cancel-btn { background: transparent; border-color: var(--border); color: var(--text2); flex: 0 0 auto; padding: 10px 16px; }
+
+  /* ─── UPGRADED INSPECTOR ZOOM DIALOG ─── */
+  .dialog.zoom-dialog { max-width: 90vw; width: 850px; height: 85vh; display: flex; flex-direction: column; padding: 20px; }
+  .zoom-close { cursor: pointer; color: var(--text2); font-size: 16px; }
+  .zoom-close:hover { color: var(--error); }
+  .zoom-canvas-container { flex: 1; width: 100%; background: #0d0d1a; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: auto; margin-bottom: 16px; position: relative; cursor: grab; }
+  #popoutCanvas { image-rendering: pixelated; background: #2a1a2e; display: block; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+  .zoom-controls { width: 100%; display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,0.2); padding: 10px 16px; border: 1px solid var(--border); flex-shrink: 0; }
+  .zoom-slider { flex: 1; accent-color: var(--accent); cursor: pointer; }
+  .zoom-val { font-family: 'Press Start 2P', monospace; font-size: 9px; color: var(--gold); min-width: 45px; text-align: right; }
+
+  .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: var(--panel2); border-left: 3px solid var(--accent); padding: 9px 14px; font-size: 15px; max-width: 300px; animation: slideIn 0.2s ease; }
+  .toast.ok { border-left-color: var(--success); }
+  .toast.err { border-left-color: var(--error); }
+  .toast.warn { border-left-color: var(--accent2); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚔ VX Ace Generator Preview</h1>
+  <span class="subtitle">Face Part Composer</span>
+  <span class="pixel-badge">FACE</span>
+</header>
+
+<div class="main-layout">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header" id="sidebarHeader" onclick="toggleSidebar()">
+      <span>📂</span>
+      <span class="sh-title">Loaded Files</span>
+      <span class="sidebar-toggle" id="sidebarToggle">▾</span>
+    </div>
+    <div class="drop-zone" id="dropZone">
+      <span class="drop-icon">🖼</span>
+      <input type="file" id="fileInput" accept=".png" multiple>
+      <div class="drop-label">
+        <strong>Drop PNG files here</strong><br>
+        or click to browse
+      </div>
+    </div>
+    <div class="sidebar-collapsible" id="sidebarCollapsible">
+      <div class="stats-bar">
+        <span id="statAccepted">0</span> loaded &nbsp;·&nbsp; <span id="statRejected">0</span> rejected
+      </div>
+      <div class="file-list" id="fileList">
+        <div class="no-files-msg" style="padding:20px 10px; font-size:14px;">No files loaded yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-area">
+    <div class="controls-bar">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Gender</span>
+        <button class="gender-btn active" id="btnMale" onclick="setGender('Male')">♂ Male</button>
+        <button class="gender-btn" id="btnFemale" onclick="setGender('Female')">♀ Female</button>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Scale</span>
+        <button class="scale-btn" id="scale1x" onclick="setScale(1)">1×</button>
+        <button class="scale-btn active" id="scale2x" onclick="setScale(2)">2×</button>
+        <button class="scale-btn" id="scale3x" onclick="setScale(3)">3×</button>
+        <button class="scale-btn" id="scale4x" onclick="setScale(4)">4×</button>
+      </div>
+      <div class="action-buttons-wrap">
+        <button class="reset-btn" onclick="resetConfiguration()">🔄 RESET</button>
+        <button class="export-btn" onclick="exportFace()">💾 EXPORT PNG</button>
+      </div>
+    </div>
+
+    <div class="content-split" id="contentSplit">
+      <div class="preview-panel" id="previewPanel">
+        <div class="preview-title">Preview</div>
+        <div class="canvas-wrapper">
+          <canvas id="previewCanvas" width="128" height="128"></canvas>
+        </div>
+        <div class="canvas-info">
+          128 × 128 px<br>
+          <span style="font-size:12px; color:var(--accent2)" id="layerInfo">No layers active</span><br>
+          <button class="popout-btn" onclick="openPopout()">🔍 Pop Out View</button>
+        </div>
+        <div class="preview-empty" id="previewEmpty">
+          <span class="pe-icon">👤</span>
+          <span class="pe-text">Load generator parts<br>to start composing</span>
+        </div>
+      </div>
+
+      <div class="panel-resizer" id="panelResizer"></div>
+
+      <div class="parts-panel" id="partsPanel">
+        <div class="no-files-msg" id="partsEmpty">
+          Load face generator PNG files to begin.<br><br>
+          Expected names: <span>Acc1_XX, FaceXX, EyesXX, EyesXXs…</span><br>
+          (where XX = two-digit number, s/a = layer variant)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="genderOverlay">
+  <div class="dialog">
+    <div class="dialog-title"><span>⚤ Assign Gender</span></div>
+    <div class="dialog-body">These files match <strong>gendered</strong> part names. Are they Male or Female parts?</div>
+    <div class="dialog-hint">
+      Gendered parts should be uploaded separately for each gender.
+    </div>
+    <div class="dialog-files" id="dialogFileList"></div>
+    <div class="dialog-btns">
+      <button class="dialog-btn male" onclick="resolveGenderDialog('Male')">♂ Male</button>
+      <button class="dialog-btn female" onclick="resolveGenderDialog('Female')">♀ Female</button>
+      <button class="dialog-btn cancel-btn" onclick="resolveGenderDialog(null)">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="popoutOverlay">
+  <div class="dialog zoom-dialog">
+    <div class="dialog-title" style="width: 100%">
+      <span>🔍 Advanced Zoom Inspector</span>
+      <span class="zoom-close" onclick="closePopout()">✕</span>
+    </div>
+    <div class="zoom-canvas-container" id="zoomCanvasContainer">
+      <canvas id="popoutCanvas" width="128" height="128"></canvas>
+    </div>
+    <div class="zoom-controls">
+      <span class="ctrl-label">Zoom Matrix (Scroll Wheel Supported)</span>
+      <input type="range" class="zoom-slider" id="zoomRange" min="1" max="16" step="1" value="6" oninput="handleZoomChange()">
+      <span class="zoom-val" id="zoomValLabel">6×</span>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const RENDER_LAYERS = [
+  { key: 'RearHair_s',    partType: 'RearHair',  suffix: 's', label: 'Rear Hair Shadow' },
+  { key: 'RearHair',      partType: 'RearHair',  suffix: '',  label: 'Rear Hair' },
+  { key: 'Neck',          partType: 'Neck',       suffix: '',  label: 'Neck (back)' },
+  { key: 'Face',          partType: 'Face',       suffix: '',  label: 'Face' },
+  { key: 'Tattoo',        partType: 'Tattoo',     suffix: '',  label: 'Tattoo' },
+  { key: 'Nose',          partType: 'Nose',       suffix: '',  label: 'Nose' },
+  { key: 'Mouth',         partType: 'Mouth',      suffix: '',  label: 'Mouth' },
+  { key: 'Eyes',          partType: 'Eyes',       suffix: '',  label: 'Eyes' },
+  { key: 'Eyes_s',        partType: 'Eyes',       suffix: 's', label: 'Eyes Shadow' },
+  { key: 'Camp_s',        partType: 'Eyebrows',   suffix: 's', label: 'Eyebrows Shadow' },
+  { key: 'Eyebrows_s',    partType: 'Eyebrows',   suffix: 's', label: 'Eyebrows Shadow' },
+  { key: 'Eyebrows',      partType: 'Eyebrows',   suffix: '',  label: 'Eyebrows' },
+  { key: 'RearHair_a',    partType: 'RearHair',   suffix: 'a', label: 'Rear Hair Accent' },
+  { key: 'FrontHair_s',   partType: 'FrontHair',  suffix: 's', label: 'Front Hair Shadow' },
+  { key: 'Beard',         partType: 'Beard',      suffix: '',  label: 'Beard' },
+  { key: 'Ears',          partType: 'Ears',       suffix: '',  label: 'Ears' },
+  { key: 'Kemono',        partType: 'Kemono',     suffix: '',  label: 'Animal Ears' },
+  { key: 'Glasses',       partType: 'Glasses',    suffix: '',  label: 'Glasses' },
+  { key: 'FrontHair',     partType: 'FrontHair',  suffix: '',  label: 'Front Hair' },
+  { key: 'FrontHair_a',   partType: 'FrontHair',  suffix: 'a', label: 'Front Hair Accent' },
+  { key: 'Acc1',          partType: 'Acc1',        suffix: '',  label: 'Accessory 1' },
+  { key: 'Acc2',          partType: 'Acc2',        suffix: '',  label: 'Accessory 2' },
+  { key: 'Neck_a',        partType: 'Neck',       suffix: 'a', label: 'Neck (front clothes)' },
+];
+
+const PART_TYPES_ORDERED = [
+  'RearHair', 'Face', 'Ears', 'Kemono', 'Nose', 'Eyebrows', 'Eyes', 'Mouth',
+  'Neck', 'Tattoo', 'Beard', 'FrontHair', 'Glasses', 'Acc1', 'Acc2',
+];
+
+const PART_LABELS = {
+  RearHair: 'Rear Hair', Face: 'Face', Ears: 'Ears', Kemono: 'Animal Ears',
+  Nose: 'Nose', Eyebrows: 'Eyebrows', Eyes: 'Eyes', Mouth: 'Mouth',
+  Neck: 'Neck', Tattoo: 'Tattoo', Beard: 'Beard', FrontHair: 'Front Hair',
+  Glasses: 'Glasses', Acc1: 'Accessory 1', Acc2: 'Accessory 2'
+};
+
+const OPTIONAL_PARTS = new Set(['Beard','Kemono','Acc1','Acc2','Glasses','Tattoo','Nose','FrontHair','RearHair','Ears','Neck']);
+const SYNC_GROUPS = [new Set(['FrontHair', 'RearHair', 'Beard', 'Kemono', 'Eyebrows']), new Set(['Face', 'Mouth', 'Nose', 'Ears'])];
+
+function getSyncGroup(partType) { return SYNC_GROUPS.find(group => group.has(partType)) || null; }
+
+const UNGENDERED_PATTERNS = [
+  { re: /^Acc1_(\d+)([sa]?)\.png$/i,    type: 'Acc1'     },
+  { re: /^Acc2_(\d+)([sa]?)\.png$/i,    type: 'Acc2'     },
+  { re: /^Ears(\d+)([sa]?)\.png$/i,     type: 'Ears'     },
+  { re: /^Eyebrows(\d+)([sa]?)\.png$/i, type: 'Eyebrows' },
+  { re: /^Glasses(\d+)([sa]?)\.png$/i,  type: 'Glasses'  },
+  { re: /^Kemono(\d+)([sa]?)\.png$/i,   type: 'Kemono'   },
+  { re: /^Tattoo(\d+)([sa]?)\.png$/i,   type: 'Tattoo'   },
+];
+const GENDERED_PATTERNS = [
+  { re: /^Eyes(\d+)([sa]?)\.png$/i,      type: 'Eyes'      },
+  { re: /^Face(\d+)([sa]?)\.png$/i,      type: 'Face'      },
+  { re: /^FrontHair(\d+)([sa]?)\.png$/i, type: 'FrontHair' },
+  { re: /^Mouth(\d+)([sa]?)\.png$/i,     type: 'Mouth'     },
+  { re: /^Neck(\d+)([sa]?)\.png$/i,      type: 'Neck'      },
+  { re: /^Nose(\d+)([sa]?)\.png$/i,      type: 'Nose'      },
+  { re: /^RearHair(\d+)([sa]?)\.png$/i,  type: 'RearHair'  },
+];
+const MALE_ONLY_PATTERNS = [{ re: /^Beard(\d+)([sa]?)\.png$/i, type: 'Beard' }];
+
+let gender = 'Male';
+let previewScale = 2;
+let loadedFiles = [];
+let rejectedFiles = [];
+let selections = {};
+PART_TYPES_ORDERED.forEach(p => selections[p] = null);
+let collapsed = {};
+let pendingGenderResolve = null;
+let sidebarOpen = true;
+let isPopoutOpen = false;
+
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('sidebar').classList.toggle('collapsed', !sidebarOpen);
+}
+
+function setScale(s) {
+  previewScale = s;
+  const px = 128 * s;
+  const canvas = document.getElementById('previewCanvas');
+  canvas.style.width = px + 'px'; canvas.style.height = px + 'px';
+  [1,2,3,4].forEach(n => document.getElementById('scale' + n + 'x').classList.toggle('active', n === s));
+}
+
+function parseFilename(filename) {
+  const name = filename.split(/[/\\]/).pop();
+  for (const p of UNGENDERED_PATTERNS) {
+    const m = name.match(p.re);
+    if (m) {
+      let suf = (m[2]||'').toLowerCase();
+      if (name.toLowerCase().includes('eyebrows') && name.toLowerCase().endsWith('s.png')) suf = 's';
+      return { partType: p.type, partNum: parseInt(m[1], 10), gender: 'Any', suffix: suf };
+    }
+  }
+  for (const p of MALE_ONLY_PATTERNS) {
+    const m = name.match(p.re);
+    if (m) return { partType: p.type, partNum: parseInt(m[1], 10), gender: 'Male', suffix: (m[2]||'').toLowerCase() };
+  }
+  for (const p of GENDERED_PATTERNS) {
+    const m = name.match(p.re);
+    if (m) return { partType: p.type, partNum: parseInt(m[1], 10), gender: '__NEEDS_DIALOG__', suffix: (m[2]||'').toLowerCase() };
+  }
+  return null;
+}
+
+function getChunkInfo(w, h) {
+  const cols = Math.round(w / 128);
+  const rows = Math.round(h / 128);
+  return { cols, rows, total: cols * rows };
+}
+
+function drawChunk(ctx, imageEl, chunkIndex, sheetW, sheetH) {
+  const { cols } = getChunkInfo(sheetW, sheetH);
+  const col = chunkIndex % cols;
+  const row = Math.floor(chunkIndex / cols);
+  ctx.drawImage(imageEl, col * 128, row * 128, 128, 128, 0, 0, 128, 128);
+}
+
+/* ─── FIXED LOAD LOGIC FOR CO-EXISTING SAME-NAME ASSETS ─── */
+async function loadFiles(files) {
+  const pngFiles = [];
+  for (const f of files) {
+    if (!f.name.toLowerCase().endsWith('.png')) {
+      rejectedFiles.push({ filename: f.name, reason: 'Not a PNG' });
+    } else {
+      pngFiles.push(f);
+    }
+  }
+
+  const ungenderedQueue = [];
+  const genderedQueue = [];
+
+  for (const f of pngFiles) {
+    const parsed = parseFilename(f.name);
+    if (!parsed) { 
+      rejectedFiles.push({ filename: f.name, reason: 'Invalid naming layout' }); 
+      continue; 
+    }
+    
+    if (parsed.gender === 'Any' || parsed.gender === 'Male') {
+      const checkName = (parsed.gender === 'Male' ? "male/" : "") + f.name;
+      if (loadedFiles.find(x => x.filename === checkName)) {
+        rejectedFiles.push({ filename: f.name, reason: 'Duplicate omitted' });
+        continue;
+      }
+      ungenderedQueue.push({ file: f, parsed });
+    } else if (parsed.gender === '__NEEDS_DIALOG__') {
+      genderedQueue.push({ file: f, parsed });
+    }
+  }
+
+  await loadGroup(ungenderedQueue);
+
+  if (genderedQueue.length > 0) {
+    const chosenGender = await showGenderDialog(genderedQueue.map(x => x.file.name));
+    if (chosenGender) {
+      const filteredGenderedQueue = [];
+      
+      for (const item of genderedQueue) {
+        item.parsed.gender = chosenGender;
+        const descriptiveName = chosenGender.toLowerCase() + "/" + item.file.name;
+        
+        if (loadedFiles.find(x => x.filename === descriptiveName)) {
+          rejectedFiles.push({ filename: item.file.name, reason: `Duplicate omitted (${chosenGender})` });
+        } else {
+          filteredGenderedQueue.push(item);
+        }
+      }
+      
+      await loadGroup(filteredGenderedQueue);
+    } else {
+      genderedQueue.forEach(x => rejectedFiles.push({ filename: x.file.name, reason: 'Skipped' }));
+    }
+  }
+
+  updateFileList(); 
+  updatePartsPanel(); 
+  renderPreview();
+  toast(`Processed loaded components successfully`, 'ok');
+}
+
+async function loadGroup(queue) {
+  await Promise.all(queue.map(({ file, parsed }) =>
+    new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const w = img.naturalWidth; const h = img.naturalHeight;
+          const { cols, rows, total } = getChunkInfo(w, h);
+          
+          const descriptiveName = (parsed.gender !== 'Any' ? parsed.gender.toLowerCase() + "/" : "") + file.name;
+          
+          loadedFiles.push({
+            filename: descriptiveName, partType: parsed.partType, partNum: parsed.partNum,
+            gender: parsed.gender, suffix: parsed.suffix, imageEl: img, dataURL: e.target.result,
+            sheetW: w, sheetH: h, chunkCols: cols, chunkRows: rows, totalChunks: total,
+          });
+          resolve();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    })
+  ));
+}
+
+function showGenderDialog(filenames) {
+  return new Promise(resolve => {
+    pendingGenderResolve = resolve;
+    document.getElementById('dialogFileList').textContent = filenames.join('\n');
+    document.getElementById('genderOverlay').classList.remove('hidden');
+  });
+}
+
+function resolveGenderDialog(g) {
+  document.getElementById('genderOverlay').classList.add('hidden');
+  if (pendingGenderResolve) { pendingGenderResolve(g); pendingGenderResolve = null; }
+}
+
+function getFilesForGender(partType) {
+  return loadedFiles.filter(f => {
+    if (f.partType !== partType) return false;
+    if (f.gender === 'Any') return true;
+    return f.gender === gender;
+  });
+}
+
+function updateFileList() {
+  const el = document.getElementById('fileList');
+  document.getElementById('statAccepted').textContent = loadedFiles.length;
+  document.getElementById('statRejected').textContent = rejectedFiles.length;
+
+  const all = [
+    ...loadedFiles.map(f => ({ name: f.filename, tag: f.partType + f.partNum + (f.suffix ? f.suffix : ''), ok: true })),
+    ...rejectedFiles.map(f => ({ name: f.filename, tag: '✗', ok: false })),
+  ];
+
+  if (all.length === 0) {
+    el.innerHTML = '<div class="no-files-msg" style="padding:20px 10px; font-size:14px;">No files loaded yet.</div>';
+    return;
+  }
+  el.innerHTML = all.map(e => `
+    <div class="file-item" title="${e.name}">
+      <div class="fi-status ${e.ok ? 'ok' : 'err'}"></div>
+      <div class="fi-name ${e.ok ? '' : 'rejected'}">${e.name}</div>
+      <div class="fi-part">${e.tag}</div>
+    </div>
+  `).join('');
+}
+
+function updatePartsPanel() {
+  const panel = document.getElementById('partsPanel');
+  const empty = document.getElementById('partsEmpty');
+
+  const hasAny = PART_TYPES_ORDERED.some(p => getFilesForGender(p).length > 0);
+  if (empty) empty.style.display = hasAny ? 'none' : '';
+
+  const mainScrollTop = panel.scrollTop;
+  const horizontalScrollCache = {};
+  panel.querySelectorAll('.part-section').forEach(s => {
+    if (s.dataset.partType && s.querySelector('.part-strip-wrap')) {
+      horizontalScrollCache[s.dataset.partType] = s.querySelector('.part-strip-wrap').scrollLeft;
+    }
+  });
+
+  panel.querySelectorAll('.part-section').forEach(s => s.remove());
+
+  PART_TYPES_ORDERED.forEach(partType => {
+    const allVariants = getFilesForGender(partType);
+    if (allVariants.length === 0) return;
+
+    const isOptional = OPTIONAL_PARTS.has(partType);
+    const sel = selections[partType];
+
+    const byNum = {};
+    allVariants.forEach(v => {
+      if (!byNum[v.partNum]) byNum[v.partNum] = [];
+      byNum[v.partNum].push(v);
+    });
+
+    const section = document.createElement('div');
+    section.className = 'part-section' + (collapsed[partType] ? ' collapsed' : '');
+    section.dataset.partType = partType;
+
+    const selFile = sel ? allVariants.find(v => v.partNum === sel.partNum && v.suffix === sel.suffix) : null;
+
+    const header = document.createElement('div');
+    header.className = 'part-section-header';
+    header.innerHTML = `
+      <div class="part-section-title">${PART_LABELS[partType] || partType}</div>
+      <div class="part-count">${Object.keys(byNum).length}</div>
+      <div class="selected-label">${selFile ? selFile.filename.split('/').pop().replace(/\.png$/i,'') : (isOptional ? 'none' : '—')}</div>
+      <div class="collapse-icon">▾</div>
+    `;
+    header.onclick = () => { collapsed[partType] = !collapsed[partType]; section.classList.toggle('collapsed', collapsed[partType]); };
+    section.appendChild(header);
+
+    const stripWrap = document.createElement('div');
+    stripWrap.className = 'part-strip-wrap';
+    const strip = document.createElement('div');
+    strip.className = 'part-strip';
+
+    if (isOptional) strip.appendChild(makeNoneThumb(partType, sel === null));
+
+    const sortedNums = Object.keys(byNum).map(Number).sort((a,b) => a-b);
+    sortedNums.forEach(num => {
+      const variants = byNum[num].sort((a,b) => a.suffix.localeCompare(b.suffix));
+      strip.appendChild(makeVariantGroup(partType, num, variants, sel));
+    });
+
+    stripWrap.appendChild(strip); section.appendChild(stripWrap); panel.appendChild(section);
+    if (horizontalScrollCache[partType] !== undefined) stripWrap.scrollLeft = horizontalScrollCache[partType];
+  });
+  panel.scrollTop = mainScrollTop;
+}
+
+function makeNoneThumb(partType, isSelected) {
+  const div = document.createElement('div'); div.className = 'part-thumb none-thumb' + (isSelected ? ' selected' : '');
+  const img = document.createElement('div'); img.className = 'part-thumb-img';
+  img.style.cssText = 'display:flex;align-items:center;justify-content:center;font-size:22px;opacity:0.4;'; img.textContent = '⊘';
+  const lbl = document.createElement('div'); lbl.className = 'part-thumb-label'; lbl.textContent = 'None';
+  div.appendChild(img); div.appendChild(lbl);
+  div.onclick = () => selectPart(partType, null);
+  return div;
+}
+
+function makeVariantGroup(partType, partNum, variants, sel) {
+  const baseVar = variants.find(v => v.suffix === '') || variants[0];
+  const selForThisNum = sel && sel.partNum === partNum;
+  const curChunk = selForThisNum ? (sel.chunk || 0) : 0;
+  const totalChunks = baseVar.totalChunks;
+
+  const group = document.createElement('div'); group.className = 'variant-group';
+
+  const suffixRow = document.createElement('div');
+  suffixRow.style.cssText = 'display:flex;gap:2px;justify-content:center;flex-wrap:wrap;max-width:60px;';
+  variants.forEach(v => {
+    if (v.suffix) {
+      const badge = document.createElement('span');
+      badge.className = 'suffix-badge ' + (v.suffix === 's' ? 'shadow' : 'front');
+      badge.textContent = v.suffix === 's' ? '⬇s' : '⬆a';
+      suffixRow.appendChild(badge);
+    }
+  });
+  if (suffixRow.children.length > 0) group.appendChild(suffixRow);
+
+  const thumb = document.createElement('div'); thumb.className = 'part-thumb' + (selForThisNum ? ' selected' : '');
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128; c.className = 'part-thumb-img';
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  drawChunk(ctx, baseVar.imageEl, curChunk, baseVar.sheetW, baseVar.sheetH);
+
+  const lbl = document.createElement('div'); lbl.className = 'part-thumb-label'; 
+  lbl.textContent = baseVar.filename.split('/').pop().replace(/\.png$/i, '');
+
+  thumb.appendChild(c); thumb.appendChild(lbl);
+  thumb.onclick = () => selectPart(partType, { partNum, suffix: baseVar.suffix, chunk: curChunk });
+  group.appendChild(thumb);
+
+  if (totalChunks > 1) {
+    const nav = document.createElement('div'); nav.className = 'chunk-nav';
+    const prevBtn = document.createElement('button'); prevBtn.className = 'chunk-btn'; prevBtn.textContent = '◀';
+    prevBtn.onclick = (e) => { e.stopPropagation(); cycleChunk(partType, partNum, baseVar.suffix, ((curChunk - 1) + totalChunks) % totalChunks); };
+    const indicator = document.createElement('span'); indicator.className = 'chunk-indicator'; indicator.textContent = `${curChunk + 1}/${totalChunks}`;
+    const nextBtn = document.createElement('button'); nextBtn.className = 'chunk-btn'; nextBtn.textContent = '▶';
+    nextBtn.onclick = (e) => { e.stopPropagation(); cycleChunk(partType, partNum, baseVar.suffix, (curChunk + 1) % totalChunks); };
+    nav.appendChild(prevBtn); nav.appendChild(indicator); nav.appendChild(nextBtn); group.appendChild(nav);
+  }
+  return group;
+}
+
+function cycleChunk(partType, partNum, suffix, newChunk) {
+  const targetGroup = getSyncGroup(partType);
+  if (targetGroup) {
+    targetGroup.forEach(pType => {
+      const activeSel = selections[pType];
+      if (activeSel) {
+        const fileData = loadedFiles.find(f => f.partType === pType && f.partNum === activeSel.partNum && (f.gender === 'Any' || f.gender === gender));
+        if (fileData) selections[pType] = { ...activeSel, chunk: newChunk % fileData.totalChunks };
+      }
+    });
+  } else {
+    const sel = selections[partType];
+    if (sel && sel.partNum === partNum) selections[partType] = { ...sel, chunk: newChunk };
+  }
+  updatePartsPanel(); renderPreview();
+}
+
+function selectPart(partType, selVal) {
+  if (OPTIONAL_PARTS.has(partType) && selVal !== null) {
+    const cur = selections[partType];
+    if (cur && cur.partNum === selVal.partNum && cur.suffix === selVal.suffix) selVal = null;
+  }
+  if (selVal !== null) {
+    const targetGroup = getSyncGroup(partType);
+    if (targetGroup) {
+      let sharedChunk = selVal.chunk || 0;
+      for (const pType of targetGroup) { if (selections[pType]) { sharedChunk = selections[pType].chunk || 0; break; } }
+      selVal.chunk = sharedChunk;
+    }
+  }
+  selections[partType] = selVal;
+  updatePartsPanel(); renderPreview();
+}
+
+function autoSelectDefaults() {
+  PART_TYPES_ORDERED.forEach(partType => {
+    if (selections[partType] !== null || OPTIONAL_PARTS.has(partType)) return;
+    const variants = getFilesForGender(partType);
+    if (variants.length > 0) {
+      const base = variants.filter(v => v.suffix === '');
+      const sorted = (base.length ? base : variants).sort((a,b) => a.partNum - b.partNum);
+      selections[partType] = { partNum: sorted[0].partNum, suffix: sorted[0].suffix, chunk: 0 };
+    }
+  });
+}
+
+function renderPreview() {
+  autoSelectDefaults();
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128); ctx.imageSmoothingEnabled = false;
+
+  let layerCount = 0;
+  RENDER_LAYERS.forEach(layerDef => {
+    const { partType, suffix } = layerDef;
+    const sel = selections[partType];
+    if (!sel) return;
+
+    const file = loadedFiles.find(f => f.partType === partType && f.partNum === sel.partNum && f.suffix === suffix && (f.gender === 'Any' || f.gender === gender));
+    if (!file) return;
+
+    ctx.globalAlpha = (suffix === 's') ? 0.5 : 1.0;
+    drawChunk(ctx, file.imageEl, sel.chunk || 0, file.sheetW, file.sheetH);
+    layerCount++;
+  });
+
+  ctx.globalAlpha = 1.0;
+  document.getElementById('previewEmpty').style.display = layerCount === 0 ? '' : 'none';
+  document.getElementById('layerInfo').textContent = layerCount > 0 ? `${layerCount} layer${layerCount !== 1 ? 's' : ''} · ${gender}` : 'No layers active';
+  if (isPopoutOpen) syncPopoutCanvas();
+}
+
+function resetConfiguration() {
+  PART_TYPES_ORDERED.forEach(p => selections[p] = null);
+  autoSelectDefaults(); updatePartsPanel(); renderPreview();
+  toast('Configuration options reset', 'warn');
+}
+
+function openPopout() { isPopoutOpen = true; document.getElementById('popoutOverlay').classList.remove('hidden'); syncPopoutCanvas(); handleZoomChange(); }
+function closePopout() { isPopoutOpen = false; document.getElementById('popoutOverlay').classList.add('hidden'); }
+
+function syncPopoutCanvas() {
+  const popoutCanvas = document.getElementById('popoutCanvas');
+  const pCtx = popoutCanvas.getContext('2d');
+  pCtx.clearRect(0, 0, 128, 128); pCtx.imageSmoothingEnabled = false;
+  pCtx.drawImage(document.getElementById('previewCanvas'), 0, 0);
+}
+
+function handleZoomChange() {
+  const zFactor = parseInt(document.getElementById('zoomRange').value, 10);
+  document.getElementById('zoomValLabel').textContent = `${zFactor}×`;
+  document.getElementById('popoutCanvas').style.width = (128 * zFactor) + 'px';
+  document.getElementById('popoutCanvas').style.height = (128 * zFactor) + 'px';
+}
+
+function handleWheelZoom(e) {
+  e.preventDefault();
+  const slider = document.getElementById('zoomRange');
+  let currentZoom = parseInt(slider.value, 10);
+  if (e.deltaY < 0) { if (currentZoom < 16) currentZoom++; } 
+  else { if (currentZoom > 1) currentZoom--; }
+  slider.value = currentZoom; handleZoomChange();
+}
+document.getElementById('zoomCanvasContainer').addEventListener('wheel', handleWheelZoom, { passive: false });
+
+function setGender(g) {
+  gender = g;
+  document.getElementById('btnMale').classList.toggle('active', g === 'Male');
+  document.getElementById('btnFemale').classList.toggle('active', g === 'Female');
+  PART_TYPES_ORDERED.forEach(p => {
+    const sel = selections[p]; if (!sel) return;
+    if (!loadedFiles.find(f => f.partType === p && f.partNum === sel.partNum && f.suffix === sel.suffix && (f.gender === 'Any' || f.gender === g))) selections[p] = null;
+  });
+  updatePartsPanel(); renderPreview();
+}
+
+function exportFace() {
+  const link = document.createElement('a');
+  link.download = `face_${gender.toLowerCase()}_${Date.now()}.png`;
+  link.href = document.getElementById('previewCanvas').toDataURL('image/png');
+  link.click();
+}
+
+const resizer = document.getElementById('panelResizer');
+const previewPanel = document.getElementById('previewPanel');
+let isDraggingResizer = false;
+resizer.addEventListener('mousedown', () => { isDraggingResizer = true; resizer.classList.add('dragging'); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; });
+window.addEventListener('mousemove', (e) => {
+  if (!isDraggingResizer) return;
+  let targetWidth = e.clientX - document.getElementById('contentSplit').getBoundingClientRect().left;
+  if (targetWidth < 180) targetWidth = 180; if (targetWidth > 600) targetWidth = 600;
+  previewPanel.style.width = targetWidth + 'px';
+});
+window.addEventListener('mouseup', () => { if (isDraggingResizer) { isDraggingResizer = false; resizer.classList.remove('dragging'); document.body.style.cursor = ''; document.body.style.userSelect = ''; } });
+
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', e => { loadFiles([...e.target.files]); e.target.value = ''; });
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); loadFiles([...e.dataTransfer.files]); });
+
+window.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('global-dragover'); });
+window.addEventListener('dragleave', e => { if (e.relatedTarget === null || e.clientX <= 0 || e.clientY <= 0) document.body.classList.remove('global-dragover'); });
+window.addEventListener('drop', e => { e.preventDefault(); document.body.classList.remove('global-dragover'); if (e.dataTransfer.files.length > 0) loadFiles([...e.dataTransfer.files]); });
+
+function toast(msg, type='ok') {
+  const el = document.createElement('div'); el.className = `toast ${type}`; el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+/* ─── CUSTOM RELATIVE SUBFOLDER PRELOADING MATRIX ─── */
+const PRELOAD_CONFIG = {
+  baseFolder: "Face/",
+  
+  ungendered: [
+    "Acc1_01.png", "Acc1_02.png", "Acc1_03.png", "Acc1_04.png", "Acc1_05.png",
+    "Acc2_01.png", "Acc2_02.png", "Acc2_03.png", "Acc2_04.png", "Acc2_05.png", "Acc2_06.png", "Acc2_07.png", "Acc2_08.png", "Acc2_09.png", "Acc2_10.png",
+    "Ears01.png", "Ears02.png", "Ears03.png",
+    "Eyebrows01.png", "Eyebrows02.png", "Eyebrows03.png", "Eyebrows04.png", "Eyebrows05.png", "Eyebrows06.png", "Eyebrows07.png", "Eyebrows08.png", "Eyebrows09.png",
+    "Eyebrows01s.png", "Eyebrows02s.png", "Eyebrows03s.png", "Eyebrows04s.png", "Eyebrows05s.png", "Eyebrows06s.png", "Eyebrows07s.png", "Eyebrows08s.png", "Eyebrows09s.png",
+    "Glasses01.png", "Glasses02.png", "Glasses03.png", "Glasses04.png", "Glasses05.png", "Glasses06.png",
+    "Kemono01.png", "Kemono02.png", "Kemono03.png", "Kemono04.png", "Kemono05.png",
+    "Tattoo01.png", "Tattoo02.png", "Tattoo03.png", "Tattoo04.png", "Tattoo05.png"
+  ],
+  
+  male: [
+    "Beard01.png", "Beard02.png", "Beard03.png",
+    "Eyes01.png", "Eyes02.png", "Eyes03.png", "Eyes04.png", "Eyes05.png", "Eyes06.png", "Eyes07.png", "Eyes08.png", "Eyes09.png", "Eyes10.png",
+    "Eyes01s.png", "Eyes02s.png", "Eyes03s.png", "Eyes04s.png", "Eyes05s.png", "Eyes06s.png", "Eyes07s.png", "Eyes08s.png", "Eyes09s.png", "Eyes10s.png",
+    "Face01.png", "Face02.png", "Face03.png", "Face04.png", "Face05.png", "Face06.png", "Face07.png", "Face08.png",
+    "FrontHair01.png", "FrontHair02.png", "FrontHair03.png", "FrontHair04.png", "FrontHair05.png", "FrontHair06.png", "FrontHair07.png", "FrontHair08.png", "FrontHair09.png", "FrontHair10.png", "FrontHair11.png", "FrontHair12.png", "FrontHair13.png", "FrontHair14.png", "FrontHair15.png", "FrontHair16.png",
+    "FrontHair01s.png", "FrontHair02s.png", "FrontHair03s.png", "FrontHair04s.png", "FrontHair05s.png", "FrontHair06s.png", "FrontHair07s.png", "FrontHair08s.png", "FrontHair09s.png", "FrontHair10s.png", "FrontHair11s.png", "FrontHair12s.png", "FrontHair13s.png", "FrontHair14s.png", "FrontHair15s.png", "FrontHair16s.png",
+    "Mouth01.png", "Mouth02.png", "Mouth03.png", "Mouth04.png", "Mouth05.png", "Mouth06.png", "Mouth07.png", "Mouth08.png",
+    "Neck01.png", "Neck02.png", "Neck03.png", "Neck04.png", "Neck05.png", "Neck06.png", "Neck07.png", "Neck08.png", "Neck09.png", "Neck10.png", "Neck11.png", "Neck12.png", "Neck13.png", "Neck14.png", "Neck15.png", "Neck16.png",
+    "Neck01a.png", "Neck02a.png", "Neck03a.png", "Neck04a.png", "Neck05a.png", "Neck06a.png", "Neck07a.png", "Neck08a.png", "Neck09a.png", "Neck10a.png", "Neck11a.png", "Neck12a.png", "Neck13a.png", "Neck14a.png", "Neck15a.png", "Neck16a.png",
+    "Nose01.png", "Nose02.png", "Nose03.png", "Nose04.png", "Nose05.png", "Nose06.png", "Nose07.png", "Nose08.png", "Nose09.png", "Nose10.png",
+    "RearHair01.png", "RearHair02.png", "RearHair03.png", "RearHair04.png", "RearHair05.png", "RearHair06.png", "RearHair07.png", "RearHair08.png", "RearHair09.png", "RearHair10.png", "RearHair11.png", "RearHair12.png", "RearHair13.png", "RearHair14.png", "RearHair15.png", "RearHair16.png",
+    "RearHair01a.png", "RearHair02a.png", "RearHair03a.png", "RearHair04a.png", "RearHair05a.png", "RearHair06a.png", "RearHair07a.png", "RearHair08a.png", "RearHair09a.png", "RearHair10a.png", "RearHair11a.png", "RearHair12a.png", "RearHair13a.png", "RearHair14a.png", "RearHair15a.png", "RearHair16a.png"
+  ],
+  
+  female: [
+    "Eyes01.png", "Eyes02.png", "Eyes03.png", "Eyes04.png", "Eyes05.png", "Eyes06.png", "Eyes07.png", "Eyes08.png", "Eyes09.png", "Eyes10.png", "Eyes11.png",
+    "Eyes01s.png", "Eyes02s.png", "Eyes03s.png", "Eyes04s.png", "Eyes05s.png", "Eyes06s.png", "Eyes07s.png", "Eyes08s.png", "Eyes09s.png", "Eyes10s.png", "Eyes11s.png",
+    "Face01.png", "Face02.png", "Face03.png", "Face04.png", "Face05.png", "Face06.png", "Face07.png", "Face08.png", "Face09.png", "Face10.png", "Face11.png", "Face12.png", "Face13.png",
+    "FrontHair01.png", "FrontHair02.png", "FrontHair03.png", "FrontHair04.png", "FrontHair05.png", "FrontHair06.png", "FrontHair07.png", "FrontHair08.png", "FrontHair09.png", "FrontHair10.png", "FrontHair11.png", "FrontHair12.png", "FrontHair13.png", "FrontHair14.png", "FrontHair15.png", "FrontHair16.png",
+    "FrontHair01s.png", "FrontHair02s.png", "FrontHair03s.png", "FrontHair04s.png", "FrontHair05s.png", "FrontHair06s.png", "FrontHair07s.png", "FrontHair08s.png", "FrontHair09s.png", "FrontHair10s.png", "FrontHair11s.png", "FrontHair12s.png", "FrontHair13s.png", "FrontHair14s.png", "FrontHair15s.png", "FrontHair16s.png",
+    "Mouth01.png", "Mouth02.png", "Mouth03.png", "Mouth04.png", "Mouth05.png", "Mouth06.png", "Mouth07.png", "Mouth08.png", "Mouth09.png", "Mouth10.png",
+    "Neck01.png", "Neck02.png", "Neck03.png", "Neck04.png", "Neck05.png", "Neck06.png", "Neck07.png", "Neck08.png", "Neck09.png", "Neck10.png", "Neck11.png", "Neck12.png", "Neck13.png", "Neck14.png", "Neck15.png", "Neck16.png",
+    "Neck01a.png", "Neck02a.png", "Neck03a.png", "Neck04a.png", "Neck05a.png", "Neck06a.png", "Neck07a.png", "Neck08a.png", "Neck09a.png", "Neck10a.png", "Neck11a.png", "Neck12a.png", "Neck13a.png", "Neck14a.png", "Neck15a.png", "Neck16a.png",
+    "Nose01.png", "Nose02.png", "Nose03.png", "Nose04.png", "Nose05.png", "Nose06.png", "Nose07.png", "Nose08.png", "Nose09.png", "Nose10.png", "Nose11.png",
+    "RearHair01.png", "RearHair02.png", "RearHair03.png", "RearHair04.png", "RearHair05.png", "RearHair06.png", "RearHair07.png", "RearHair08.png", "RearHair09.png", "RearHair10.png", "RearHair11.png", "RearHair12.png", "RearHair13.png", "RearHair14.png", "RearHair15.png", "RearHair16.png",
+    "RearHair01a.png", "RearHair02a.png", "RearHair03a.png", "RearHair04a.png", "RearHair05a.png", "RearHair06a.png", "RearHair07a.png", "RearHair08a.png", "RearHair09a.png", "RearHair10a.png", "RearHair11a.png", "RearHair12a.png", "RearHair13a.png", "RearHair14a.png", "RearHair15a.png", "RearHair16a.png"
+  ]
+};
+
+async function preloadSingleFile(url, filename, forcedGender) {
+  const parsed = parseFilename(filename);
+  if (!parsed) return;
+  parsed.gender = forcedGender;
+
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const w = img.naturalWidth; const h = img.naturalHeight;
+      const { cols, rows, total } = getChunkInfo(w, h);
+      const descriptiveName = (forcedGender !== 'Any' ? forcedGender.toLowerCase() + "/" : "") + filename;
+      
+      loadedFiles.push({
+        filename: descriptiveName, partType: parsed.partType, partNum: parsed.partNum,
+        gender: parsed.gender, suffix: parsed.suffix, imageEl: img, dataURL: url,
+        sheetW: w, sheetH: h, chunkCols: cols, chunkRows: rows, totalChunks: total,
+      });
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = url;
+  });
+}
+
+async function initPreloadSequence() {
+  const count = PRELOAD_CONFIG.ungendered.length + PRELOAD_CONFIG.male.length + PRELOAD_CONFIG.female.length;
+  if (count === 0) return;
+  
+  toast(`Preloading system defaults...`, 'warn');
+  
+  for (const f of PRELOAD_CONFIG.ungendered) {
+    await preloadSingleFile(PRELOAD_CONFIG.baseFolder + f, f, 'Any');
+  }
+  for (const f of PRELOAD_CONFIG.male) {
+    await preloadSingleFile(PRELOAD_CONFIG.baseFolder + "male/" + f, f, 'Male');
+  }
+  for (const f of PRELOAD_CONFIG.female) {
+    await preloadSingleFile(PRELOAD_CONFIG.baseFolder + "female/" + f, f, 'Female');
+  }
+  
+  updateFileList(); updatePartsPanel(); renderPreview();
+  toast('Preloaded layout segments successfully!', 'ok');
+}
+
+renderPreview();
+window.addEventListener('DOMContentLoaded', initPreloadSequence);
+</script>
+</body>
+</html>
